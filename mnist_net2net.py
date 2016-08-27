@@ -186,8 +186,37 @@ def wider2net_fc(teacher_w1, teacher_b1, teacher_w2, new_width, init):
     student_b1 = np.concatenate((teacher_b1, new_b1), axis=0)
 
     return student_w1, student_b1, student_w2
-
-def wider2net_fc_dx(teacher_w1, teacher_b1, teacher_w2, new_width, init, strat):
+    
+    
+    
+def get_activation_fc_layer_dx(layername, train_x, teacher_model, nb_addunits, strategy):
+    from keras import backend as K 
+    get_activations = K.function([teacher_model.layers[0].input, K.learning_phase()], teacher_model.get_layer(layername).output)
+    activations = get_activations([train_x,0])
+    unit_aver = np.sum(activations, axis = 0)*(1.0/len(train_x))
+    import heapq
+    index = []
+    if strategy == 'big_nb':
+        temp = heapq.nlargest(nb_addunits, unit_aver)
+        for i in range(len(unit_aver)):
+            if unit_aver[i] in temp:
+                index = index + [i]
+    else:
+        temp = heapq.nsmallest(nb_addunits, unit_aver)
+        for i in range(len(unit_aver)):
+            if unit_aver[i] in temp:
+                index = index + [i]
+    return index
+            
+                
+    
+    
+    
+    
+    
+    
+    
+def wider2net_fc_dx(teacher_w1, teacher_b1, teacher_w2, new_width, init, layername, train_x, teacher_model, strategy):
     '''Get initial weights for a wider fully connected (dense) layer
        with a bigger nout, by 'random-padding' or 'net2wider'.
 
@@ -202,7 +231,7 @@ def wider2net_fc_dx(teacher_w1, teacher_b1, teacher_w2, new_width, init, strat):
         init: initialization algorithm for new weights,
           either 'random-pad' or 'net2wider'
         strat: copy algorithm for new weights,
-          'big' or 'small',(only for init='net2wider')
+          'big' or 'small' or 'random'
     '''
     assert teacher_w1.shape[1] == teacher_w2.shape[0], (
         'successive layers from teacher model should have compatible shapes')
@@ -217,8 +246,10 @@ def wider2net_fc_dx(teacher_w1, teacher_b1, teacher_w2, new_width, init, strat):
         new_b1 = np.ones(n) * 0.1
         new_w2 = np.random.normal(0, 0.1, size=(n, teacher_w2.shape[1]))
     elif init == 'net2wider':
-        if strat == 'big'
-        index = np.random.randint(teacher_w1.shape[1], size=n)  #select the units to copy
+        if strategy == 'random':
+            index = np.random.randint(teacher_w1.shape[1], size=n)  #select the units to copy
+        else:
+            index = get_activation_fc_layer_dx(layername, train_x, teacher_model, n, strategy)
         factors = np.bincount(index)[index] + 1.
         new_w1 = teacher_w1[:, index]
         new_b1 = teacher_b1[index]
@@ -290,7 +321,7 @@ def make_teacher_model(train_data, validation_data, nb_epoch=3):
 
 
 def make_wider_student_model(teacher_model, train_data,
-                             validation_data, init, nb_epoch=3):
+                             validation_data, init, strategy, nb_epoch=3):
     '''Train a wider student model based on teacher_model,
        with either 'random-pad' (baseline) or 'net2wider'
     '''
@@ -321,10 +352,11 @@ def make_wider_student_model(teacher_model, train_data,
     model.get_layer('conv1').set_weights([new_w_conv1, new_b_conv1])
     model.get_layer('conv2').set_weights([new_w_conv2, b_conv2])
 
+    train_x, train_y = train_data
     w_fc1, b_fc1 = teacher_model.get_layer('fc1').get_weights()
     w_fc2, b_fc2 = teacher_model.get_layer('fc2').get_weights()
-    new_w_fc1, new_b_fc1, new_w_fc2 = wider2net_fc(
-        w_fc1, b_fc1, w_fc2, new_fc1_width, init)
+    new_w_fc1, new_b_fc1, new_w_fc2 = wider2net_fc_dx(
+        w_fc1, b_fc1, w_fc2, new_fc1_width, init, 'fc1', train_x, teacher_model, strategy)
     model.get_layer('fc1').set_weights([new_w_fc1, new_b_fc1])
     model.get_layer('fc2').set_weights([new_w_fc2, b_fc2])
 
@@ -332,7 +364,6 @@ def make_wider_student_model(teacher_model, train_data,
                   optimizer=SGD(lr=0.001, momentum=0.9),
                   metrics=['accuracy'])
 
-    train_x, train_y = train_data
     history = model.fit(train_x, train_y, nb_epoch=nb_epoch,
                         validation_data=validation_data)
     return model, history
@@ -394,7 +425,7 @@ def net2wider_experiment():
     (2) a wider student model with `random_pad` initializer
     (3) a wider student model with `Net2WiderNet` initializer
     '''
-    train_data = (train_x, train_y)
+    train_data = (train_x[0:100], train_y[0:100])
     validation_data = (validation_x, validation_y)
     print('\nExperiment of Net2WiderNet ...')
     print('\nbuilding teacher model ...')
@@ -402,14 +433,18 @@ def net2wider_experiment():
                                           validation_data,
                                           nb_epoch=3)
 
-    print('\nbuilding wider student model by random padding ...')
-    make_wider_student_model(teacher_model, train_data,
-                             validation_data, 'random-pad',
+    print('\nbuilding wider student model by big ...')
+    student_model_b, history_b = make_wider_student_model(teacher_model, train_data,
+                             validation_data, 'net2wider', 'big',
                              nb_epoch=3)
-    print('\nbuilding wider student model by net2wider ...')
-    student_model_w, history_w = make_wider_student_model(teacher_model, train_data,
-                             validation_data, 'net2wider',
+    print('\nbuilding wider student model by small ...')
+    student_model_s, history_s = make_wider_student_model(teacher_model, train_data,
+                             validation_data, 'net2wider', 'small',
                              nb_epoch=3)
+    print('\nbuilding wider student model by net2wider_random ...')
+    student_model_r, history_r = make_wider_student_model(teacher_model, train_data,
+                             validation_data, 'net2wider', 'random',
+                             nb_epoch=3)                         
 
 
 def net2deeper_experiment():
@@ -435,9 +470,9 @@ def net2deeper_experiment():
                               validation_data, 'net2deeper',
                               nb_epoch=3)
 
+net2wider_experiment()
 
-
-from keras.utils.visualize_util import plot
-plot(student_model_w, to_file='sm_w.png',show_shapes=True)
+#from keras.utils.visualize_util import plot
+#plot(student_model_w, to_file='sm_w.png',show_shapes=True)
 #plot(student_model_d, to_file='sm_d.png',show_shapes=True)
-plot(teacher_model, to_file='sm.png',show_shapes=True)
+#plot(teacher_model, to_file='sm.png',show_shapes=True)
