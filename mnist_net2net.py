@@ -192,8 +192,10 @@ def wider2net_fc(teacher_w1, teacher_b1, teacher_w2, new_width, init):
 def get_activation_fc_layer_dx(layername, train_x, teacher_model, nb_addunits, strategy):
     from keras import backend as K 
     get_activations = K.function([teacher_model.layers[0].input, K.learning_phase()], teacher_model.get_layer(layername).output)
-    activations = get_activations([train_x,0])
-    unit_aver = np.sum(activations, axis = 0)*(1.0/len(train_x))
+    unit_aver = np.zeros(64)
+    for i in range(len(train_x)/60):
+        activations = get_activations([train_x[(i*60):(1000+i*60)],0])
+        unit_aver = unit_aver + np.sum(activations, axis = 0)*(1.0/len(train_x))
     import heapq
     index = []
     if strategy == 'big_nb':
@@ -425,7 +427,7 @@ def net2wider_experiment():
     (2) a wider student model with `random_pad` initializer
     (3) a wider student model with `Net2WiderNet` initializer
     '''
-    train_data = (train_x[0:100], train_y[0:100])
+    train_data = (train_x, train_y)
     validation_data = (validation_x, validation_y)
     print('\nExperiment of Net2WiderNet ...')
     print('\nbuilding teacher model ...')
@@ -435,11 +437,11 @@ def net2wider_experiment():
 
     print('\nbuilding wider student model by big ...')
     student_model_b, history_b = make_wider_student_model(teacher_model, train_data,
-                             validation_data, 'net2wider', 'big',
+                             validation_data, 'net2wider', 'big_nb',
                              nb_epoch=3)
     print('\nbuilding wider student model by small ...')
     student_model_s, history_s = make_wider_student_model(teacher_model, train_data,
-                             validation_data, 'net2wider', 'small',
+                             validation_data, 'net2wider', 'small_nb',
                              nb_epoch=3)
     print('\nbuilding wider student model by net2wider_random ...')
     student_model_r, history_r = make_wider_student_model(teacher_model, train_data,
@@ -470,9 +472,30 @@ def net2deeper_experiment():
                               validation_data, 'net2deeper',
                               nb_epoch=3)
 
-net2wider_experiment()
+#net2wider_experiment()
+#train_data = (train_x[0:10], train_y[0:10])
+#validation_data = (validation_x[0:10], validation_y[0:10])
+train_data = (train_x, train_y)
+validation_data = (validation_x, validation_y)
+print('\nExperiment of Net2WiderNet ...')
+print('\nbuilding teacher model ...')
+teacher_model, _ = make_teacher_model(train_data,
+                                      validation_data,
+                                      nb_epoch=3)
 
+print('\nbuilding wider student model by big ...')
+student_model_b, history_b = make_wider_student_model(teacher_model, train_data,
+                         validation_data, 'net2wider', 'big_nb',
+                         nb_epoch=3)
+print('\nbuilding wider student model by small ...')
+student_model_s, history_s = make_wider_student_model(teacher_model, train_data,
+                         validation_data, 'net2wider', 'small_nb',
+                         nb_epoch=3)
+print('\nbuilding wider student model by net2wider_random ...')
+student_model_r, history_r = make_wider_student_model(teacher_model, train_data,
+                         validation_data, 'net2wider', 'random',
+                         nb_epoch=3)    
 #from keras.utils.visualize_util import plot
 #plot(student_model_w, to_file='sm_w.png',show_shapes=True)
-#plot(student_model_d, to_file='sm_d.png',show_shapes=True)
+#plot(student_model_b, to_file='sm_b.png',show_shapes=True)
 #plot(teacher_model, to_file='sm.png',show_shapes=True)
