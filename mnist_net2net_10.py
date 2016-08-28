@@ -212,10 +212,10 @@ def wider2net_fc(teacher_w1, teacher_b1, teacher_w2, new_width, init):
 def get_activation_fc_layer_dx(layername, train_x, teacher_model, nb_addunits, strategy):
     from keras import backend as K 
     get_activations = K.function([teacher_model.layers[0].input, K.learning_phase()], [teacher_model.get_layer(layername).output])
-    unit_aver = np.zeros(32)
+    unit_aver = np.zeros(64)
     for i in range(len(train_x)/60):
         activations = get_activations([train_x[(i*60):(1000+i*60)],0])[0]
-        unit_aver = unit_aver + np.sum(activations, axis = 0)
+        unit_aver = unit_aver + np.sum(activations, axis = 0)*(1.0/len(train_x))
     import heapq
     
     print('unit-aver',unit_aver)
@@ -341,7 +341,7 @@ def make_teacher_model(train_data, validation_data, nb_epoch=3):
     model.add(Conv2D(64, 3, 3, border_mode='same', name='conv2'))
     model.add(MaxPooling2D(name='pool2'))
     model.add(Flatten(name='flatten'))
-    model.add(Dense(32, activation='relu', name='fc1'))
+    model.add(Dense(64, activation='relu', name='fc1'))
     model.add(Dense(nb_class, activation='softmax', name='fc2'))
     model.compile(loss='categorical_crossentropy',
                   optimizer=SGD(lr=0.01, momentum=0.9),
@@ -513,9 +513,9 @@ def net2deeper_experiment():
                               nb_epoch=3)
 
 #net2wider_experiment()
-#train_data = (train_x[0:120], train_y[0:120])
-#validation_data = (validation_x[0:120], validation_y[0:120])
-t_nb_epoch = 4
+#train_data = (train_x[0:100], train_y[0:100])
+#validation_data = (validation_x[0:100], validation_y[0:100])
+t_nb_epoch = 2
 s_nb_epoch = 50
 train_data = (train_x[0:60000:20], train_y[0:60000:20])
 validation_data = (validation_x[0:10000:20], validation_y[0:10000:20])
