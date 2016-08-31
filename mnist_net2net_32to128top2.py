@@ -296,8 +296,8 @@ def wider2net_fc_dx(teacher_w1, teacher_b1, teacher_w2, new_width, init, layerna
     elif init == 'net2wider':
         # add small noise to break symmetry, so that student model will have
         # full capacity later
-        #noise = np.random.normal(0, 5e-2 * new_w2.std(), size=new_w2.shape)
-        student_w2 = np.concatenate((teacher_w2, new_w2), axis=0)
+        noise = np.random.normal(0, 5e-2 * new_w2.std(), size=new_w2.shape)
+        student_w2 = np.concatenate((teacher_w2, new_w2 + noise), axis=0)
         student_w2[index, :] = new_w2
     student_b1 = np.concatenate((teacher_b1, new_b1), axis=0)
 
@@ -515,10 +515,10 @@ def net2deeper_experiment():
 #net2wider_experiment()
 #train_data = (train_x[0:120], train_y[0:120])
 #validation_data = (validation_x[0:120], validation_y[0:120])
-t_nb_epoch = 3
-s_nb_epoch = 200
-train_data = (train_x[0:60000:10], train_y[0:60000:10])
-validation_data = (validation_x[:10000:10], validation_y[0:10000:10])
+t_nb_epoch = 4
+s_nb_epoch = 50
+train_data = (train_x[0:60000:20], train_y[0:60000:20])
+validation_data = (validation_x[0:10000:10], validation_y[0:10000:10])
 print('\nExperiment of Net2WiderNet ...')
 print('\nbuilding teacher model ...')
 teacher_model, history_t = make_teacher_model(train_data,\
@@ -546,5 +546,3 @@ student_model_r, history_r = make_wider_student_model(teacher_model, train_data,
 #plot(student_model_s, to_file='sm_s.png',show_shapes=True)
 #plot(student_model_r, to_file='sm_r.png',show_shapes=True)
 #plot(teacher_model, to_file='sm.png',show_shapes=True)
-
-#it seem need more epoches!!! 

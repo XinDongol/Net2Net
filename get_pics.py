@@ -29,4 +29,4 @@ def dxplot(obj,dir_name):
     
     
 for obj in ['b_losses', 'b_acces','e_val_losses', 'e_val_acces','e_losses', 'e_acces']:
-    dxplot(obj,'test')
+    dxplot(obj,'32to128_top2_epoch200_6000')
